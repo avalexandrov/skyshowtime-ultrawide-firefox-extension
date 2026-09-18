@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SkyShowtime Ultrawide</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="popup">
+      <header>
+        <p class="eyebrow">PLAYBACK DISPLAY</p>
+        <h1>SkyShowtime Ultrawide</h1>
+      </header>
+
+      <fieldset id="mode-options">
+        <legend>Current video</legend>
+        <label class="mode-option">
+          <input type="radio" name="mode" value="original" />
+          <span class="radio-indicator" aria-hidden="true"></span>
+          <span>
+            <strong>Original</strong>
+            <small>Keep SkyShowtime's default fit</small>
+          </span>
+        </label>
+        <label class="mode-option">
+          <input type="radio" name="mode" value="fill" />
+          <span class="radio-indicator" aria-hidden="true"></span>
+          <span>
+            <strong>Fill Ultrawide</strong>
+            <small>Fill the display by cropping the outer edges</small>
+          </span>
+        </label>
+      </fieldset>
+
+      <p class="shortcut" aria-label="Keyboard shortcut: Alt plus Shift plus U; Command plus Shift plus U on Mac">
+        <span>Shortcut</span>
+        <kbd>Alt</kbd><b>+</b><kbd>Shift</kbd><b>+</b><kbd>U</kbd>
+      </p>
+
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+      <p class="platform-note">On Mac: <kbd>⌘</kbd><b>+</b><kbd>Shift</kbd><b>+</b><kbd>U</kbd></p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
