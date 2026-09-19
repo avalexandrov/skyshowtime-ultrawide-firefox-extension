@@ -1,8 +1,17 @@
 {
   "manifest_version": 3,
   "name": "SkyShowtime Ultrawide",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Adds an optional per-title fill mode to SkyShowtime playback on ultrawide displays.",
+  "homepage_url": "https://github.com/avalexandrov/skyshowtime-ultrawide-firefox-extension",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "{c8e95e6f-0a3e-4ed0-8378-51feff942e02}",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
+    }
+  },
   "permissions": ["storage"],
   "background": {
     "scripts": ["background/background.js"]

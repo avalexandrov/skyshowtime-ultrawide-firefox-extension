@@ -42,3 +42,7 @@ icons/                   Local extension icon
 ## Privacy
 
 This extension makes no network requests, collects no data, uses no analytics or telemetry, and loads no remote scripts. It stores only local Fill Ultrawide preferences keyed by SkyShowtime title routes. It does not inspect video frames, access video sources, interact with DRM, or intercept network traffic.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
