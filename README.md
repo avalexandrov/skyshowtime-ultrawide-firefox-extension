@@ -4,6 +4,8 @@ A small Firefox extension that remembers an optional **Fill Ultrawide** choice f
 
 SkyShowtime can deliver a cinematic movie inside a 16:9 video stream with encoded black bars. On an ultrawide monitor, Fill Ultrawide applies `object-fit: cover !important` to SkyShowtime's video element only, which crops those outer bars and fills the player. It does not resize the player container, subtitles, or controls.
 
+![SkyShowtime Ultrawide popup showing Original and Fill Ultrawide modes](screenshot.png)
+
 ## Why Fill Ultrawide is manual
 
 The browser reports both letterboxed cinematic videos and genuine 16:9 programmes as the same 16:9 stream dimensions. It cannot reliably tell whether black bars are encoded into the image, so automatically enabling Fill Ultrawide could crop the top and bottom of genuine 16:9 content.
