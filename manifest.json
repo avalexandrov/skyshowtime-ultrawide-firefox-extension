@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
   "name": "SkyShowtime Ultrawide",
-  "version": "1.1.0",
-  "description": "Adds an optional per-video fill mode to SkyShowtime playback on ultrawide displays.",
+  "version": "1.0.0",
+  "description": "Adds an optional per-title fill mode to SkyShowtime playback on ultrawide displays.",
+  "permissions": ["storage"],
   "background": {
     "scripts": ["background/background.js"]
   },

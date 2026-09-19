@@ -5,6 +5,8 @@
     ORIGINAL: "original",
     FILL: "fill",
   });
+  const TITLE_PREFERENCES_KEY = "titleModes";
+  const MAX_SAVED_TITLES = 200;
   const VIDEO_SELECTORS = [
     '[data-gsp-video-component="true"] > video',
     "#core-video-shaka",
@@ -15,12 +17,39 @@
     '[data-gsp-video-component="true"]',
     '[data-testid="video-component"]',
   ].join(", ");
+  const GENERIC_ROUTE_SEGMENTS = new Set([
+    "",
+    "account",
+    "home",
+    "login",
+    "my-list",
+    "profiles",
+    "search",
+    "settings",
+    "signin",
+  ]);
+  const TITLE_ROUTE_SEGMENTS = new Set([
+    "content",
+    "details",
+    "episode",
+    "movie",
+    "play",
+    "programme",
+    "program",
+    "series",
+    "show",
+    "title",
+    "video",
+    "watch",
+  ]);
 
   let mode = MODE.ORIGINAL;
   let activeVideo = null;
+  let activeTitleKey = null;
   let managedVideo = null;
   let lifecycleVideo = null;
   let scheduledCheck = false;
+  let titleModes = {};
   const originalObjectFits = new WeakMap();
 
   /**
@@ -36,6 +65,32 @@
     }
 
     return null;
+  }
+
+  /**
+   * Builds a conservative persistence key from a title-specific SkyShowtime
+   * route. Generic routes, such as Home and Search, deliberately have no key:
+   * reusing a Fill preference there could crop a different programme.
+   */
+  function currentTitleKey() {
+    const url = new URL(window.location.href);
+    const pathname = url.pathname.replace(/\/+$/, "") || "/";
+    const segments = pathname
+      .split("/")
+      .filter(Boolean)
+      .map((segment) => segment.toLowerCase());
+    const lastSegment = segments.at(-1) ?? "";
+    const hasTitleRouteSegment = segments.some((segment) => TITLE_ROUTE_SEGMENTS.has(segment));
+    const hasIdentifier = segments.some((segment) => /\d/.test(segment));
+
+    if (
+      GENERIC_ROUTE_SEGMENTS.has(lastSegment) ||
+      (!hasTitleRouteSegment && !hasIdentifier)
+    ) {
+      return null;
+    }
+
+    return `route:${url.origin}${pathname}`;
   }
 
   function isExtensionObjectFit(video) {
@@ -93,11 +148,12 @@
       return;
     }
 
-    // SkyShowtime may reuse a video element while replacing its media source.
-    // An emptied player is not clearly the same playback, so choose safety over
-    // keeping a crop that might be wrong for the next title.
+    // A reused element that empties its media is no longer clearly the same
+    // playback. Keep Original until a changed title route or new element gives
+    // us a safe identity for a remembered preference.
     restoreManagedVideo();
     mode = MODE.ORIGINAL;
+    scheduleReconcile();
   }
 
   function watchVideoLifecycle(video) {
@@ -110,27 +166,33 @@
     lifecycleVideo?.addEventListener("emptied", resetForNewPlayback);
   }
 
-  function resetForPlayerChange(video) {
-    if (video === activeVideo) {
-      return;
+  function resetForPlaybackChange(video, titleKey) {
+    if (video === activeVideo && titleKey === activeTitleKey) {
+      return false;
     }
 
-    // A different element is treated as a different playback instance. Never
-    // carry Fill Ultrawide to it, even during SkyShowtime SPA navigation.
     restoreManagedVideo();
     activeVideo = video;
+    activeTitleKey = titleKey;
     mode = MODE.ORIGINAL;
     watchVideoLifecycle(video);
+
+    // Fill is restored only for an exact route that the user previously chose.
+    if (video && titleKey && titleModes[titleKey] === MODE.FILL) {
+      applyFill(video);
+      mode = MODE.FILL;
+    }
+
+    return true;
   }
 
   function reconcilePlayer() {
     const video = findActiveVideo();
-    resetForPlayerChange(video);
+    const titleKey = currentTitleKey();
+    const identityChanged = resetForPlaybackChange(video, titleKey);
 
-    // We retain Fill only when the exact same video element survives a player
-    // update. This lets the current playback recover without enabling Fill on
-    // a newly mounted episode or movie.
-    if (mode === MODE.FILL && video && managedVideo === video && !isExtensionObjectFit(video)) {
+    // Keep Fill through harmless updates to the same current video element.
+    if (!identityChanged && mode === MODE.FILL && video && managedVideo === video && !isExtensionObjectFit(video)) {
       applyFill(video);
     }
 
@@ -142,15 +204,44 @@
       mode,
       hasVideo: Boolean(activeVideo),
       applied,
+      titleMemoryAvailable: Boolean(activeTitleKey),
+      remembered: Boolean(activeTitleKey && titleModes[activeTitleKey] === MODE.FILL),
     };
   }
 
-  function setPlaybackMode(nextMode) {
+  async function saveTitleMode(nextMode) {
+    if (!activeTitleKey) {
+      return false;
+    }
+
+    const nextTitleModes = { ...titleModes };
+    delete nextTitleModes[activeTitleKey];
+
+    if (nextMode === MODE.FILL) {
+      const keys = Object.keys(nextTitleModes);
+      while (keys.length >= MAX_SAVED_TITLES) {
+        delete nextTitleModes[keys.shift()];
+      }
+      nextTitleModes[activeTitleKey] = MODE.FILL;
+    }
+
+    try {
+      await browser.storage.local.set({ [TITLE_PREFERENCES_KEY]: nextTitleModes });
+      titleModes = nextTitleModes;
+      return true;
+    } catch (error) {
+      console.warn("SkyShowtime Ultrawide could not save the title preference:", error);
+      return false;
+    }
+  }
+
+  async function setPlaybackMode(nextMode) {
     const video = reconcilePlayer();
 
     if (nextMode !== MODE.FILL) {
       restoreManagedVideo();
       mode = MODE.ORIGINAL;
+      await saveTitleMode(MODE.ORIGINAL);
       return playbackState(false);
     }
 
@@ -161,10 +252,11 @@
 
     applyFill(video);
     mode = MODE.FILL;
+    await saveTitleMode(MODE.FILL);
     return playbackState(true);
   }
 
-  function togglePlaybackMode() {
+  async function togglePlaybackMode() {
     reconcilePlayer();
     return setPlaybackMode(mode === MODE.FILL ? MODE.ORIGINAL : MODE.FILL);
   }
@@ -229,20 +321,50 @@
     });
   }
 
-  browser.runtime.onMessage.addListener((message) => {
+  async function loadTitleModes() {
+    try {
+      const stored = await browser.storage.local.get({ [TITLE_PREFERENCES_KEY]: {} });
+      const savedModes = stored[TITLE_PREFERENCES_KEY];
+
+      if (!savedModes || typeof savedModes !== "object" || Array.isArray(savedModes)) {
+        return;
+      }
+
+      titleModes = Object.fromEntries(
+        Object.entries(savedModes).filter(
+          ([key, savedMode]) => typeof key === "string" && savedMode === MODE.FILL,
+        ),
+      );
+    } catch (error) {
+      console.warn("SkyShowtime Ultrawide could not load title preferences:", error);
+    }
+  }
+
+  const titleModesReady = loadTitleModes();
+
+  browser.runtime.onMessage.addListener(async (message) => {
+    await titleModesReady;
+
     switch (message?.type) {
       case "getPlaybackState":
         reconcilePlayer();
-        return Promise.resolve(playbackState());
+        return playbackState();
       case "setPlaybackMode":
-        return Promise.resolve(setPlaybackMode(message.mode));
+        return setPlaybackMode(message.mode);
       case "togglePlaybackMode":
-        return Promise.resolve(togglePlaybackMode());
+        return togglePlaybackMode();
       default:
         return undefined;
     }
   });
 
-  watchForPlayerChanges();
-  reconcilePlayer();
+  async function initialize() {
+    await titleModesReady;
+    watchForPlayerChanges();
+    reconcilePlayer();
+  }
+
+  initialize().catch((error) => {
+    console.warn("SkyShowtime Ultrawide could not initialize:", error);
+  });
 })();

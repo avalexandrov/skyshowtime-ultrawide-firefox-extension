@@ -37,8 +37,14 @@ function describeState(playback) {
     return ["Start a SkyShowtime video to use Fill Ultrawide.", false];
   }
 
-  return playback.mode === MODE.FILL
-    ? ["Fill Ultrawide is active for this video.", false]
+  if (playback.mode === MODE.FILL) {
+    return playback.remembered
+      ? ["Fill Ultrawide is active and saved for this title.", false]
+      : ["Fill Ultrawide is active for this video only.", true];
+  }
+
+  return playback.titleMemoryAvailable
+    ? ["Original sizing is active. This title will stay Original.", false]
     : ["Original sizing is active for this video.", false];
 }
 
